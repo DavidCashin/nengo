@@ -1,3 +1,18 @@
+'''
+Simply run this file in a terminal using:
+    python vectorClassifier.py
+An output figure will be generated describing the initial categories, the categories after initial training
+
+The model I chose to implement is a categorization algorithm inspired by Grossberg and Carpenter's ART (Adaptive Resonance Theory) model (http://cns.bu.edu/Profiles/Grossberg/CarGroRos1991NNART2A.pdf). ART has been in development for over 25 years, with both supervised and unsupervised learning implementations. It incorporates a 'vigilance' parameter to regulate the creation of new information that doesn't already fit into categories we have established in our minds. The related neurobiological areas associated with categorization that ART attempts to model are the parietal, prefrontal, hippocampal areas, amoung others. A detailed review of ART writen by Grossberg, including biological implications, can be found at http://www.scholarpedia.org/article/Adaptive_resonance_theory
+
+My model works by initially using an array of predifined categories. In this case, I match numbers to points along a line to represent perhaps a 2D shape, object or wave. The existing categories are comprised of xVals (can literally be though of as x points along a graph) and yVals (the corresponding values to those points). On the generated graph, the first image is the initial mapping of x positions to values. All have relatively equal activation. The second generated image represents the combination of the previously learned category data with the new data added to that category. This is just to show an intermediate step before deciding whether data from this new sequence needs to have its own category. Finally, the last image represents the final category data after deciding which parts of the data were so different that they required their own categories (via the vigilance parameter). Newly generated categories are prefaced with NewCat. When a new category is generated, the category it was initially assigned to reverts back to the state it was in before new data was introduced to it.
+
+
+Increasing the vigilance parameter will decrease the sensitivity existing categories have for different information. For example, using the newSequence array I have already defined, run the script. Next, run the script using a vigilance parameter of 4 instead of 3. You will notice the final output graph no longer has a new category assigned to it. This is because the vigilance parameter did not deem it different enough to warrant a new category. Using different number combinations in the newSequence variable, you will see how the actual quantitative data the word 'One', 'Two' or 'Three' represent, are applied to the quantitative bounds of the category. This is because the y_value output function orders the word-numbers, giving them increasing value.
+
+
+'''
+
 import matplotlib.pyplot as plt
 
 import nengo
@@ -8,7 +23,7 @@ from nengo import spa
 dimensions = 32
 
 #new sequence to insert into existing categories
-newSequence = ['One','Four','Four','Two']
+newSequence = ['One','Three','Four','One']
 
 #The inputs can be visualized as a 2D graph. x_input values are locations along the x axis,
 #while y_output are the values at those location. This fits nicely with the final output.
@@ -49,7 +64,7 @@ def x_input(t):
     else:
         return '0'
 
-#even though the values are words, they correspond to actual quantitative relationships to 
+#Even though the values are words, they correspond to actual quantitative relationships to 
 #the input. For example, using C with a value of Four will produce a closer-to-optimal value
 #when the input sequence is C:3 than when it is C:1 since 3 is closer to 5 than 1 is.
 def y_output(t):
@@ -64,18 +79,16 @@ def y_output(t):
     else:
         return '0'
 
-def cue_input(t):
+def cue_input(t): 
     if t < 1.0:
         return '0'
-    #initial mapping
 
-    #assemble semantic pointer string
+    #assemble semantic pointer string; initial mapping
     spStr = ['0']
     for i in range(len(xVals)):
         spStr.insert(len(spStr),xVals[i])
         spStr.insert(len(spStr),yVals[i]) 
 
-    #sequence=['0', 'A', 'One', '0', 'B', 'Two', '0', 'C', 'Three', '0', 'D', 'Four']
     idx = int(((t - 1.0) // (1. / len(spStr))) % len(spStr))
     return spStr[idx]
 
@@ -97,9 +110,6 @@ sim.run(1.5)
 plt.figure(figsize=(10, 10))
 vocab = model.get_default_vocab(dimensions)
 
-#fig = plt.figure()
-#fig.suptitle("'0', 'One', 'A', '0', 'Four', 'B', '0', 'Four', 'C', '0', 'Two', 'D'")
-
 #original position-value mappings
 plt.subplot(5, 1, 1)
 originalMapping = []
@@ -118,16 +128,24 @@ plt.legend(fontsize='x-small')
 plt.xlabel("Trained sequence")
 
 
-#updated category mappings superimposing new data and original mappings, representing a
+#Updated category mappings superimposing new data and original mappings, representing a
 #combination of similarity. That is, similar mappings will become obvious (ie, an A:One + A:One)
 #while dissimilar mappings become averaged (A:One + A:Two)
 plt.subplot(5, 1, 5)
-#TODO add vigilance parameter here (only add if close enough, otherwise reinitialize the 
-#final output graph with a new value?)
 finalCats = []
 newCats = []
+for i in range(len(xVals)):
+    if(abs(i - yVals.index(newSequence[i])) < vigilance):
+        #if the number in the new sequence is within the acceptable range to be added to 
+        #that category, we go ahead and add it.
+        finalCats.insert(len(finalCats),''+xVals[i]+' * '+yVals[i]+' + '+xVals[i]+' * '+newSequence[i])
+    else:
+        #keep the original sequence as it was
+        finalCats.insert(len(finalCats),''+xVals[i]+' * '+yVals[i])
+        #but add a new category representing this outlier
+        finalCats.insert(len(finalCats),'NewCat'+str(i)+' * '+newSequence[i])
 
-for pointer in ['A * One + A * One', 'B * Two + B * Four', 'C * Three + C * Four', 'D * Four + D * Two']:
+for pointer in finalCats:#ex:['A * One + A * One', 'B * Two + B * Four', 'C * Three + C * Four', 'D * Four + D * Two']:
     plt.plot(sim.trange(), vocab.parse(pointer).dot(sim.data[conv].T), label=pointer)
 plt.legend(fontsize='x-small')
 plt.xlabel('Final mapping')
